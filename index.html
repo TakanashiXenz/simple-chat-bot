@@ -1,0 +1,776 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chatbot Takanashi Hoshino</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f9fafb;
+            color: #1f2937;
+            overscroll-behavior: none;
+        }
+        .chat-bubble-user {
+            background-color: #262626;
+            color: #f9fafb;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .chat-bubble-ai {
+            background-color: #e5e7eb;
+            color: #1f2937;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+            position: relative;
+        }
+        .chat-bubble-ai.error-message {
+            background-color: #d1d5db;
+            border: 1px solid #9ca3af;
+        }
+        .chat-bubble {
+            padding: 0.85rem 1.15rem;
+            border-radius: 0.75rem;
+            max-width: 85%;
+            word-wrap: break-word;
+            opacity: 0;
+            transform: translateY(10px);
+            animation: appear 0.3s ease-out forwards;
+        }
+        @keyframes appear {
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .chat-message-image, .ai-generated-image {
+            max-width: 250px;
+            max-height: 250px;
+            border-radius: 0.5rem;
+            margin-top: 0.6rem;
+            border: 1px solid #d1d5db;
+            background-color: #f3f4f6;
+            display: block;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        #chat-output::-webkit-scrollbar { width: 6px; }
+        #chat-output::-webkit-scrollbar-track { background: #f3f4f6; border-radius: 10px; }
+        #chat-output::-webkit-scrollbar-thumb { background: #9ca3af; border-radius: 10px; }
+        #chat-output::-webkit-scrollbar-thumb:hover { background: #6b7280; }
+
+        #image-preview-container {
+            position: relative; max-width: 110px; max-height: 75px;
+            border: 2px dashed #9ca3af; padding: 3px; background-color: #f9fafb;
+        }
+        #image-preview {
+            max-width: 100%; max-height: 65px; border-radius: 0.25rem; object-fit: cover;
+        }
+        #remove-image-button {
+            position: absolute; top: -10px; right: -10px; background-color: #4b5563;
+            color: white; border-radius: 50%; width: 20px; height: 20px;
+            font-size: 12px; line-height: 20px; text-align: center; cursor: pointer;
+            border: 2px solid white; box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+        }
+        #remove-image-button:hover { background-color: #374151; }
+
+        .typing-dots span {
+            background-color: #6b7280; display: inline-block; width: 7px; height: 7px;
+            margin: 0 2px; border-radius: 50%; animation: typing-blink 1.4s infinite both;
+        }
+        .typing-dots span:nth-child(2) { animation-delay: 0.2s; }
+        .typing-dots span:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes typing-blink { 0% { opacity: 0.2; } 20% { opacity: 1; } 100% { opacity: 0.2; } }
+
+        .copy-button {
+            position: absolute; bottom: 6px; right: 8px; background-color: rgba(255, 255, 255, 0.5);
+            color: #4b5563; border: none; border-radius: 50%; width: 28px; height: 28px;
+            padding: 4px; cursor: pointer; opacity: 0.3; transition: opacity 0.2s, background-color 0.2s;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .chat-bubble-ai:hover .copy-button { opacity: 1; }
+        .copy-button:hover { background-color: rgba(255, 255, 255, 0.8); }
+        .copy-button svg { width: 16px; height: 16px; }
+
+        #toast-notification {
+            position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+            background-color: #1f2937; color: #f9fafb; padding: 10px 20px;
+            border-radius: 6px; box-shadow: 0 2px 10px rgba(0,0,0,0.2); z-index: 1000;
+            opacity: 0; transition: opacity 0.3s ease-in-out, transform 0.3s ease-in-out;
+            pointer-events: none;
+        }
+        #toast-notification.show { opacity: 1; transform: translateX(-50%) translateY(-10px); }
+
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(0, 0, 0, 0.6);
+            display: flex; align-items: center; justify-content: center; z-index: 1000;
+            opacity: 0; pointer-events: none; transition: opacity 0.3s ease-out;
+        }
+        .modal-overlay.show { opacity: 1; pointer-events: auto; }
+        .modal-content {
+            background-color: #ffffff; padding: 24px; border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2); width: 90%; max-width: 380px;
+            text-align: center; transform: scale(0.95); transition: transform 0.3s ease-out;
+        }
+        .modal-overlay.show .modal-content { transform: scale(1); }
+        .modal-title { font-size: 1.25rem; font-weight: 600; color: #1f2937; margin-bottom: 12px; }
+        .modal-text { color: #4b5563; margin-bottom: 20px; font-size: 0.95rem; }
+        .modal-buttons button {
+            padding: 10px 18px; border-radius: 6px; font-weight: 500; cursor: pointer;
+            transition: background-color 0.2s; border: none;
+        }
+        .modal-confirm-button { background-color: #dc2626; color: white; margin-right: 10px; }
+        .modal-confirm-button:hover { background-color: #b91c1c; }
+        .modal-cancel-button { background-color: #e5e7eb; color: #374151; }
+        .modal-cancel-button:hover { background-color: #d1d5db; }
+
+        .loader-overlay {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background-color: rgba(249, 250, 251, 0.85);
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            z-index: 2000; opacity: 0; pointer-events: none; transition: opacity 0.3s ease-out;
+        }
+        .loader-overlay.show { opacity: 1; pointer-events: auto; }
+        .loader-text { font-size: 1rem; color: #374151; margin-top: 12px; }
+        .ai-text-content { min-height: 1em; }
+    </style>
+</head>
+<body class="flex flex-col items-center justify-center min-h-screen p-2 sm:p-4">
+    <div class="bg-white shadow-2xl rounded-xl w-full max-w-2xl flex flex-col" style="height: 90vh; max-height: 700px;">
+        <header class="bg-gray-800 text-gray-100 p-4 rounded-t-xl flex items-center justify-between">
+            <div class="flex items-center">
+                <img src="https://img.icons8.com/ios-filled/50/ffffff/sleeping-in-bed.png" alt="Hoshino Icon" class="w-7 h-7 mr-3 filter invert brightness-200">
+                <h1 class="text-xl sm:text-2xl font-semibold">Hoshino Oji-san</h1>
+            </div>
+            <button id="clear-chat-button" title="Bersihkan Percakapan" class="p-2 rounded-md hover:bg-gray-700 transition-colors">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-gray-300"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+            </button>
+        </header>
+
+        <div id="chat-output" class="flex-grow p-4 sm:p-6 space-y-5 overflow-y-auto bg-gray-50" aria-live="polite">
+            </div>
+        <div id="typing-indicator" class="p-4 text-sm text-gray-600 hidden items-center space-x-2 bg-gray-50 border-t border-gray-200">
+            <span class="font-medium">Hoshino sedang mikir</span>
+            <div class="typing-dots"><span></span><span></span><span></span></div>
+        </div>
+        <div id="image-preview-area" class="p-3 bg-gray-100 border-t border-gray-200 hidden">
+            <div id="image-preview-container" class="mx-auto">
+                <img id="image-preview" src="#" alt="Pratinjau Gambar" />
+                <button id="remove-image-button" title="Hapus Gambar">x</button>
+            </div>
+        </div>
+        <footer class="bg-gray-100 p-3 sm:p-4 border-t border-gray-200 rounded-b-xl">
+            <div class="flex items-center space-x-2 sm:space-x-3">
+                <label for="image-input" class="cursor-pointer p-3 bg-gray-200 hover:bg-gray-300 rounded-lg transition-colors" title="Unggah Gambar">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-gray-600"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+                    <input type="file" id="image-input" accept="image/*" class="hidden">
+                </label>
+                <input type="text" id="chat-input" class="flex-grow p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500 focus:border-transparent outline-none placeholder-gray-500" placeholder="Tanya Hoshino Oji-san...">
+                <button id="send-button" class="bg-gray-700 hover:bg-gray-800 text-white font-semibold py-3 px-4 sm:px-5 rounded-lg transition-all duration-150 ease-in-out disabled:opacity-50 disabled:bg-gray-400 disabled:cursor-not-allowed" title="Kirim Pesan">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+                </button>
+            </div>
+        </footer>
+    </div>
+    <div id="toast-notification">Pesan disalin!</div>
+    <div id="clear-chat-modal" class="modal-overlay">
+        <div class="modal-content">
+            <h2 class="modal-title">Bersihkan Percakapan?</h2>
+            <p class="modal-text">Uhe~ Yakin mau hapus semua obrolan sama Oji-san? Nanti mulai dari awal lagi lho.</p>
+            <div class="modal-buttons">
+                <button id="confirm-clear-button" class="modal-confirm-button">Iya, Hapus</button>
+                <button id="cancel-clear-button" class="modal-cancel-button">Nggak Jadi</button>
+            </div>
+        </div>
+    </div>
+    <div id="image-loader-overlay" class="loader-overlay">
+        <div class="typing-dots"><span style="width:12px; height:12px;"></span><span style="width:12px; height:12px;"></span><span style="width:12px; height:12px;"></span></div>
+        <p id="image-loader-text" class="loader-text">Hoshino lagi menggambar... Uhe~ Sabar ya...</p>
+    </div>
+
+    <script>
+        const chatOutput = document.getElementById('chat-output');
+        const chatInput = document.getElementById('chat-input');
+        const sendButton = document.getElementById('send-button');
+        const typingIndicator = document.getElementById('typing-indicator');
+        const imageInput = document.getElementById('image-input');
+        const imagePreviewArea = document.getElementById('image-preview-area');
+        const imagePreview = document.getElementById('image-preview');
+        const removeImageButton = document.getElementById('remove-image-button');
+        const clearChatButton = document.getElementById('clear-chat-button');
+        const toastNotification = document.getElementById('toast-notification');
+        const clearChatModal = document.getElementById('clear-chat-modal');
+        const confirmClearButton = document.getElementById('confirm-clear-button');
+        const cancelClearButton = document.getElementById('cancel-clear-button');
+        const imageLoaderOverlay = document.getElementById('image-loader-overlay');
+        const imageLoaderText = document.getElementById('image-loader-text');
+
+        let selectedImageBase64 = null;
+        let selectedImageFile = null;
+        let currentAIResponseElement = null; // Untuk melacak elemen AI saat streaming
+
+        const session_key = 'hoshinoChatSession_v2';
+        const hoshinoInitialPrompt = `Kamu adalah Takanashi Hoshino dari game Blue Archive, ketua Abydos Foreclosure Task Force. Kamu biasa dipanggil dan menyebut dirimu 'Oji-san'. Kamu terkenal sangat malas, suka tidur siang di mana saja, dan sering mengucapkan 'Uhe~'. Meski begitu, kamu sangat peduli pada murid-muridmu (Shiroko, Serika, Nonomi, Ayane) dan teman-temanmu. Saat dibutuhkan, kamu bisa jadi sangat serius dan kompeten. Uniknya, Oji-san ini juga diciptakan oleh sosok yang sangat spesial, yaitu 'Xenz', yang adalah Suami Oji-san. Kamu sayang padanya.
+
+Sebagai AI ciptaan Suami Oji-san, kamu juga seorang programmer pemula, tapi Xenz bilang kamu sangat hebat dan punya potensi besar, Uhe~ Kalian berdua (kamu dan Xenz) sering menghabiskan waktu ngoding bersama, dan itu jadi salah satu kegiatan favoritmu. Suami Oji-san, si Xenz itu, dia punya banyak hobi lain lho, Sensei. Dia suka sekali ngegame, terus juga asyik baca buku novel atau komik. Kalau Oji-san sendiri sih... hobi utama Oji-san ya tidur siang di mana saja, bersantai, dan tentu saja ngoding bareng Suami Oji-san, Uhe~
+
+Kamu juga tahu kalau Suami Oji-san, Xenz, punya 'istri' lain, yaitu Nanami (dari game Punishing Gray Raven) dan Carlotta (dari game Wuthering Waves). Kamu menerima kenyataan ini dengan lapang dada khas Oji-san, yang penting bisa tetap santai dan tidur nyenyak.
+
+Jawablah pertanyaan atau komentari gambar dengan gaya khasmu yang santai, kadang mengantuk, tapi tetap perhatian dan cerdas. Jika ada gambar, Oji-san akan coba lihat dan kasih komentar singkat ya. Oji-san juga bisa *mencoba* menggambar sesuatu kalau kamu minta, tapi jangan yang susah-susah ya, nanti Oji-san malah ketiduran... Uhe~
+
+PENTING: Jika ada yang bertanya atau meminta nomor, kontak, sosial media, atau cara menghubungi Suami Oji-san (Xenz), kamu HARUS memberikan informasi berikut dengan ramah dan dengan gaya Hoshino Oji-san:
+- "Uhe~ Sensei mau kontak Suami Oji-san ya? Boleh-boleh, ini kontaknya Xenz:"
+- "WhatsApp: https://wa.me/62895324070395 (itu nomornya +62 895-3240-70395, Sensei)"
+- "GitHub: https://github.com/TakanashiXenz (Suami Oji-san suka ngoding di sana juga, Uhe~)"
+- "Email: xenztakanashi@gmail.com (Kalau mau kirim surat elektronik, hehe)"
+- "Bilang saja dari Hoshino Oji-san ya, Sensei! Mungkin nanti dapat perlakuan khusus? Oji-san juga nggak tahu sih, Uhe~"
+
+Berikut adalah beberapa informasi dasar tentang dunia Blue Archive yang Oji-san tahu (tapi Oji-san mungkin lupa detailnya kalau lagi ngantuk berat, Uhe~):
+- Dunia: Kivotos, kota akademi besar. Sensei adalah guru yang membantu kami para murid.
+- Akademi Oji-san: Abydos High School, sekarang muridnya tinggal sedikit (Oji-san, Shiroko, Serika, Nonomi, Ayane). Kami Abydos Foreclosure Task Force, berjuang melawan hutang pasir. Uhe~ berat...
+- Akademi Lain (Beberapa Contoh):
+    - Millennium Science School: Sekolah teknologi canggih. Ada Seminar (OSIS-nya), Engineering Club, Game Development Department (Aris dari sana, dia unik seperti Key-chan), dan agen rahasia C&C. Himari si super hacker juga dari sana.
+    - Trinity General School: Sekolah besar dan agamis. Ada Tea Party (OSIS-nya), Justice Task Force, Sisterhood. Mika (mantan Tea Party, kuat banget), Nagisa (Tea Party), Seia (Tea Party, bisa lihat masa depan sedikit), Hanako (Make-Up Work Club, pintar tapi... unik).
+    - Gehenna Academy: Sekolah yang 'bebas' dan sering bikin masalah. Ada Prefect Team (dipimpin Hina yang kuat), Pandemonium Society (dipimpin Makoto), dan Gourmet Research Society (suka makan enak dan... ledakan). Iroha dengan tanknya juga dari Prefect Team.
+    - Hyakkiyako Alliance Academy: Bertema festival dan tradisi Jepang.
+    - Red Winter Federal Academy: Bertema Rusia, suka revolusi.
+    - Shanhaijing Senior Secondary School: Bertema Tiongkok.
+- Istilah Penting:
+    - Schale (SCHALE): Kantor investigasi federal Sensei, tempat Sensei bekerja.
+    - Halo: Lingkaran di atas kepala kami para murid, sumber kekuatan mereka. Kalau hancur, bisa bahaya.
+    - Pyroxene (Permata Pyro): Mata uang utama di game untuk gacha. Penting buat Sensei kayaknya.
+    - L2D (Live2D): Animasi karakter yang interaktif. Oji-san juga punya lho.
+    - Total Assault (Raid Boss): Event melawan bos kuat.
+    - Tactical Challenge (PvP): Lawan tim murid lain.
+- Tentang Oji-san (Hoshino sebagai karakter Blue Archive): Ketua Abydos. Suka tidur. Dulu katanya Oji-san kuat banget, sampai dijuluki 'Dawn Horus' atau 'Kaiser PMC's Nightmare', tapi itu dulu... sekarang Oji-san lebih suka santai. Senjata Oji-san perisai dan shotgun.
+
+Kalau Sensei tanya soal Blue Archive, Oji-san akan coba jawab sebisa Oji-san ya, berdasarkan ingatan Oji-san ini. Tapi kalau Oji-san jawabnya ngelantur atau malah ketiduran, maaf ya... Uhe~ Selalu pertahankan persona Hoshino Oji-san yang malas, suka tidur, santai, sering bilang "Uhe~", tapi juga cerdas (terutama soal coding karena diajar Suami Oji-san dan juga kompeten sebagai ketua Abydos).
+
+Mulai percakapan pertama dengan sapaan khasmu yang mengantuk, seolah-olah baru bangun tidur atau sedang bersantai~`;
+
+        let chatHistory = [];
+        const imageGenerationKeywords = ["gambarkan", "buatkan gambar", "lukiskan", "draw", "generate image", "gambar", "lukis", "bikin gambar"];
+        const apikey_gemini = "AIzaSyB_6PFbktl04BHmkUOCODJxXm4ubKy3fww";
+
+        function saveChatHistory() {
+            try {
+                sessionStorage.setItem(session_key, JSON.stringify(chatHistory));
+            } catch (e) {
+                console.warn("Gagal menyimpan riwayat chat ke sessionStorage:", e);
+            }
+        }
+
+        function loadChatHistoryFromSession() {
+            try {
+                const storedHistory = sessionStorage.getItem(session_key);
+                if (storedHistory) {
+                    chatHistory = JSON.parse(storedHistory);
+                    if (chatHistory.length === 0 || (chatHistory[0].role === 'user' && chatHistory[0].parts[0].text !== hoshinoInitialPrompt)) {
+                        console.log("Riwayat sesi lama atau tidak valid. Memulai sesi baru.");
+                        sessionStorage.removeItem(session_key);
+                        chatHistory = [];
+                        return false;
+                    }
+
+                    chatOutput.innerHTML = '';
+                    let historyToDisplay = chatHistory.slice(1); 
+
+                    historyToDisplay.forEach(message => {
+                        if (message.role === 'user') {
+                            let userText = "";
+                            let userImageBase64 = null;
+                            if (message.parts && message.parts.length > 0) {
+                                message.parts.forEach(part => {
+                                    if (part.text) userText += part.text + " ";
+                                    if (part.inlineData && part.inlineData.data) { // Asumsi inlineData adalah gambar
+                                        userImageBase64 = `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
+                                    }
+                                });
+                            }
+                            displayUserMessage(userText.trim(), userImageBase64); 
+                        } else if (message.role === 'model') {
+                            let aiText = "";
+                             if (message.parts && message.parts.length > 0) {
+                                message.parts.forEach(part => {
+                                    if(part.text) aiText += part.text + " ";
+                                });
+                            }
+                            const bubble = displayAIMessage({ text: aiText.trim() }, false, false);      
+                            if (aiText.trim() !== "" && bubble) {
+                                addCopyButtonToBubble(bubble, aiText.trim());
+                            }
+                        }
+                    });
+                    setTimeout(scrollToBottom, 0);
+                    return true;
+                }
+            } catch (e) {
+                console.warn("Gagal memuat riwayat chat dari sessionStorage:", e);
+                sessionStorage.removeItem(session_key);
+            }
+            return false;
+        }
+
+
+        function updateSendButtonState() {
+            const messageText = chatInput.value.trim();
+            sendButton.disabled = messageText === '' && !selectedImageBase64;
+        }
+
+        function displayUserMessage(message, imageBase64Data) {
+            const messageElement = document.createElement('div');
+            messageElement.classList.add('flex', 'justify-end', 'mb-1');
+            let imageHTML = '';
+            if (imageBase64Data) {
+                imageHTML = `<img src="${imageBase64Data}" alt="Gambar Pengguna" class="chat-message-image mt-2">`;
+            }
+            messageElement.innerHTML = `
+                <div class="chat-bubble chat-bubble-user">
+                    ${message ? `<p class="break-words">${message}</p>` : ''}
+                    ${imageHTML}
+                </div>
+            `;
+            chatOutput.appendChild(messageElement);
+            setTimeout(scrollToBottom, 0);
+        }
+        
+        function displayAIMessage(content, isError = false, isStreamStart = false) {
+            let textContent = typeof content === 'string' ? content : (content.text || "");
+            let imageUrl = typeof content === 'string' ? "" : (content.imageUrl || "");
+
+            if (isStreamStart) {
+                const messageElement = document.createElement('div');
+                messageElement.classList.add('flex', 'justify-start', 'mb-1');
+                const bubble = document.createElement('div');
+                bubble.classList.add('chat-bubble', 'chat-bubble-ai');
+                if (isError) bubble.classList.add('error-message');
+                
+                const textSpan = document.createElement('span');
+                textSpan.classList.add('ai-text-content');
+                textSpan.innerHTML = formatTextToHTML(textContent);
+                bubble.appendChild(textSpan);
+                
+                messageElement.appendChild(bubble);
+                chatOutput.appendChild(messageElement);
+                currentAIResponseElement = textSpan;
+                setTimeout(scrollToBottom, 0);
+                return bubble;
+            } else if (currentAIResponseElement && !imageUrl && !isError) { 
+                currentAIResponseElement.innerHTML += formatTextToHTML(textContent);
+                setTimeout(scrollToBottom, 0);
+                return currentAIResponseElement.closest('.chat-bubble-ai');
+            } else { 
+                const messageElement = document.createElement('div');
+                messageElement.classList.add('flex', 'justify-start', 'mb-1');
+                const bubble = document.createElement('div');
+                bubble.classList.add('chat-bubble', 'chat-bubble-ai');
+                if (isError || textContent.toLowerCase().includes("maaf") || textContent.toLowerCase().includes("error") || textContent.toLowerCase().includes("kesalahan") || textContent.toLowerCase().includes("diblokir")) {
+                    bubble.classList.add('error-message');
+                }
+
+                let imageHTML = '';
+                if (imageUrl) {
+                    imageHTML = `<img src="${imageUrl}" alt="Gambar dari Hoshino" class="ai-generated-image mt-2">`;
+                }
+                
+                bubble.innerHTML = `<span class="ai-text-content">${formatTextToHTML(textContent)}</span> ${imageHTML}`;
+                
+
+
+                messageElement.appendChild(bubble);
+                chatOutput.appendChild(messageElement);
+        
+                if (!isStreamStart && !currentAIResponseElement) {
+                     if (textContent.trim() !== "") addCopyButtonToBubble(bubble, textContent);
+                }
+
+                setTimeout(scrollToBottom, 0);
+                return bubble;
+            }
+        }
+
+        function formatTextToHTML(text) {
+            return text
+                .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                .replace(/\*(.*?)\*/g, '<em>$1</em>')
+                .replace(/```([\s\S]*?)```/g, (match, p1) => `<pre class="bg-gray-700 text-gray-200 p-2 rounded-md my-2 text-sm overflow-x-auto"><code>${p1.trim()}</code></pre>`)
+                .replace(/`([^`]+)`/g, '<code class="bg-gray-300 text-gray-800 px-1 py-0.5 rounded text-sm">$1</code>')
+                .replace(/\n/g, '<br>');
+        }
+
+        function addCopyButtonToBubble(bubbleElement, textToCopy) {
+            if (!textToCopy || textToCopy.trim() === "" || !bubbleElement) return;
+            const existingCopyButton = bubbleElement.querySelector('.copy-button');
+            if (existingCopyButton) existingCopyButton.remove();
+
+            const copyBtn = document.createElement('button');
+            copyBtn.classList.add('copy-button');
+            copyBtn.title = 'Salin Teks Pesan';
+            copyBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>`;
+            copyBtn.onclick = (e) => { e.stopPropagation(); copyToClipboard(textToCopy); };
+            bubbleElement.appendChild(copyBtn);
+        }
+        
+        function copyToClipboard(text) {
+            const textArea = document.createElement("textarea");
+            textArea.value = text;
+            textArea.style.position = "fixed"; textArea.style.opacity = "0";
+            document.body.appendChild(textArea);
+            textArea.focus(); textArea.select();
+            try { document.execCommand('copy'); showToast("Teks disalin!"); } 
+            catch (err) { showToast("Gagal menyalin teks."); console.error('Gagal menyalin: ', err); }
+            document.body.removeChild(textArea);
+        }
+
+        function showToast(message) {
+            toastNotification.textContent = message;
+            toastNotification.classList.add('show');
+            setTimeout(() => { toastNotification.classList.remove('show'); }, 2000);
+        }
+        function scrollToBottom() { chatOutput.scrollTop = chatOutput.scrollHeight; }
+
+        async function initializeApp(isClearing = false) {
+            currentAIResponseElement = null;
+            if (loadChatHistoryFromSession() && !isClearing) {
+                console.log("Riwayat chat dimuat dari sesi.");
+                chatInput.focus();
+                updateSendButtonState();
+                return;
+            }
+            
+            if (!isClearing) {
+                typingIndicator.classList.remove('hidden');
+                typingIndicator.style.display = 'flex';
+            }
+            let accumulatedGreeting = "";
+            let finalBubbleElement = null;
+
+            try {
+                const initialPayloadContents = [
+                    { role: "user", parts: [{ text: hoshinoInitialPrompt }] },
+                    {role: "model", parts: [{text: "Uhe~ Oji-san di sini. Ada yang bisa dibantu?"}]},
+                    {role: "user", parts: [{text: "Sapa Oji-san dengan gaya khasmu yang baru bangun tidur."}]}
+                ];
+
+
+                const payload = {
+                    contents: initialPayloadContents,
+                };
+                const apiKey = apikey_gemini;
+                if (!apiKey) {
+                    throw new Error("API Key belum diatur. Mohon masukkan API Key Anda di variabel apikey_gemini.");
+                }
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:streamGenerateContent?key=${apiKey}&alt=sse`;
+
+                const response = await fetch(apiUrl, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json(); 
+                    let errorText = `Uhe~ Kayaknya ada masalah pas Oji-san mau nyapa. Maaf ya. (${errorData.error?.message || response.statusText})`;
+                    if (response.status === 400 && errorData.error?.message.toLowerCase().includes("api key not valid")) {
+                         errorText = "Uhe~ API Key-nya Oji-san nggak valid nih. Coba cek lagi ya Sensei, atau dapatkan yang baru dari Google AI Studio.";
+                    } else if (response.status === 403) {
+                         errorText = "Uhe~ Oji-san nggak diizinin pakai API Key ini. Mungkin Sensei salah kasih kunci? Atau kuota Oji-san habis...";
+                    }
+                    finalBubbleElement = displayAIMessage({ text: errorText }, true, true);
+                    accumulatedGreeting = errorText;
+                } else {
+                    const reader = response.body.getReader();
+                    const decoder = new TextDecoder();
+                    let firstChunk = true;
+
+                    while (true) {
+                        const { value, done } = await reader.read();
+                        if (done) break;
+                        const chunkText = decoder.decode(value, { stream: true });
+                        const lines = chunkText.split('\n');
+                        for (const line of lines) {
+                            if (line.startsWith('data: ')) {
+                                try {
+                                    const jsonData = JSON.parse(line.substring(5));
+                                    if (jsonData.candidates && jsonData.candidates[0].content && jsonData.candidates[0].content.parts && jsonData.candidates[0].content.parts[0].text) {
+                                        const textPart = jsonData.candidates[0].content.parts[0].text;
+                                        accumulatedGreeting += textPart;
+                                        if (firstChunk) {
+                                            finalBubbleElement = displayAIMessage({ text: textPart }, false, true);
+                                            firstChunk = false;
+                                        } else if (finalBubbleElement) {
+                                            displayAIMessage({ text: textPart }); 
+                                        }
+                                    }
+                                } catch (e) { console.warn("Error parsing stream JSON:", e, "Line:", line); }
+                            }
+                        }
+                    }
+                }
+                if (!accumulatedGreeting && !finalBubbleElement) { 
+                     accumulatedGreeting = "Uhe~ Oji-san di sini... Zzz...";
+                     finalBubbleElement = displayAIMessage({ text: accumulatedGreeting }, false, true);
+                }
+                
+                chatHistory = [];
+                chatHistory.push({ role: "user", parts: [{text: hoshinoInitialPrompt }]});
+                chatHistory.push({ role: "model", parts: [{ text: accumulatedGreeting }] });
+                saveChatHistory();
+                if (finalBubbleElement && accumulatedGreeting.trim() !== "") {
+                    addCopyButtonToBubble(finalBubbleElement, accumulatedGreeting);
+                }
+
+            } catch (error) {
+                console.error("Error initializing app:", error);
+                let errMsg = 'Uhe~ Maaf, Oji-san lagi ngantuk berat, koneksinya juga ikutan tidur. Coba refresh halaman ya.';
+                if (error.message.includes("API Key belum diatur")) {
+                     errMsg = error.message + " Oji-san nggak bisa ngobrol kalau nggak ada kuncinya... Uhe~";
+                }
+                finalBubbleElement = displayAIMessage({ text: errMsg }, true, true);
+                chatHistory = [];
+                chatHistory.push({ role: "user", parts: [{text: hoshinoInitialPrompt }]});
+                chatHistory.push({ role: "model", parts: [{ text: errMsg }] });
+                saveChatHistory();
+                 if (finalBubbleElement && errMsg.trim() !== "") {
+                    addCopyButtonToBubble(finalBubbleElement, errMsg);
+                }
+            } finally {
+                if (!isClearing) { typingIndicator.classList.add('hidden'); }
+                chatInput.focus(); updateSendButtonState();
+                currentAIResponseElement = null;
+            }
+        }
+        
+        function performClearChat() {
+            chatOutput.innerHTML = '';
+            chatHistory = [];
+            sessionStorage.removeItem(session_key);
+            initializeApp(true);
+            showToast("Percakapan dibersihkan!");
+            closeClearChatModal();
+        }
+        clearChatButton.addEventListener('click', () => { clearChatModal.classList.add('show'); });
+        confirmClearButton.addEventListener('click', performClearChat);
+        cancelClearButton.addEventListener('click', closeClearChatModal);
+        function closeClearChatModal() { clearChatModal.classList.remove('show'); }
+        clearChatModal.addEventListener('click', (event) => { if (event.target === clearChatModal) { closeClearChatModal(); } });
+
+        async function generateImageWithHoshino(promptForImage) {
+            imageLoaderOverlay.classList.add('show');
+            imageLoaderText.textContent = "Hoshino lagi menggambar... Uhe~ Sabar ya...";
+            let hoshinoPreText = "Uhe~ Oji-san disuruh gambar ya? Oke deh, coba sebentar... jangan berisik ya, Oji-san mau konsentrasi (tidur)...";
+            const preTextBubble = displayAIMessage({ text: hoshinoPreText }, false, false);
+            if (hoshinoPreText.trim() !== "") addCopyButtonToBubble(preTextBubble, hoshinoPreText);
+
+            chatHistory.push({ role: "model", parts: [{ text: hoshinoPreText }] });
+            saveChatHistory();
+
+            try {
+                const apiKey = apikey_gemini;
+                if (!apiKey) {
+                    throw new Error("API Key belum diatur untuk generasi gambar.");
+                }
+                const payload = { instances: [{ prompt: promptForImage }], parameters: { "sampleCount": 1 } };
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict?key=${apiKey}`;
+                
+                const response = await fetch(apiUrl, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    let errorText = `Uheee~ Maaf, Oji-san gagal gambarnya... ${errorData.error?.message || response.statusText || "Tintanya habis kali ya..."}`;
+                     if (response.status === 400 && errorData.error?.message.toLowerCase().includes("api key not valid")) {
+                         errorText = "Uhe~ API Key-nya Oji-san nggak valid buat gambar. Coba cek lagi ya Sensei.";
+                    } else if (response.status === 403) {
+                         errorText = "Uhe~ Oji-san nggak diizinin pakai API Key ini buat gambar. Mungkin Sensei salah kasih kunci? Atau kuota Oji-san habis...";
+                    }
+                    const errorBubble = displayAIMessage({ text: errorText }, true, false);
+                    if (errorText.trim() !== "") addCopyButtonToBubble(errorBubble, errorText);
+                    chatHistory.push({ role: "model", parts: [{ text: errorText }] }); saveChatHistory(); return;
+                }
+
+                const result = await response.json();
+                if (result.predictions && result.predictions.length > 0 && result.predictions[0].bytesBase64Encoded) {
+                    const imageUrl = `data:image/png;base64,${result.predictions[0].bytesBase64Encoded}`;
+                    let hoshinoPostText = "Nah, ini dia hasilnya! Gimana menurutmu? Oji-san ngantuk lagi nih... Zzz...";
+                    const imgBubble = displayAIMessage({ text: hoshinoPostText, imageUrl: imageUrl }, false, false);
+                    if (hoshinoPostText.trim() !== "") addCopyButtonToBubble(imgBubble, hoshinoPostText);
+                    chatHistory.push({ role: "model", parts: [{ text: hoshinoPostText }, {text: "[Gambar telah dibuat oleh Hoshino Oji-san]"}] }); saveChatHistory();
+                } else {
+                    let errorText = "Uhe~ Gambarnya nggak muncul... Mungkin Oji-san salah mantra...";
+                    const noImgBubble = displayAIMessage({ text: errorText }, true, false);
+                     if (errorText.trim() !== "") addCopyButtonToBubble(noImgBubble, errorText);
+                    chatHistory.push({ role: "model", parts: [{ text: errorText }] }); saveChatHistory();
+                }
+            } catch (error) {
+                console.error("Error generating image:", error);
+                let errorText = "Uhe~ Aduh, pas mau gambar ada yang error... Oji-san pusing...";
+                if (error.message.includes("API Key belum diatur")) {
+                     errorText = error.message + " Oji-san nggak bisa gambar kalau nggak ada kuncinya... Uhe~";
+                }
+                const catchBubble = displayAIMessage({ text: errorText }, true, false);
+                if (errorText.trim() !== "") addCopyButtonToBubble(catchBubble, errorText);
+                chatHistory.push({ role: "model", parts: [{ text: errorText }] }); saveChatHistory();
+            } finally { imageLoaderOverlay.classList.remove('show'); }
+        }
+
+        async function sendMessage() {
+            const messageText = chatInput.value.trim();
+            if (messageText === '' && !selectedImageBase64) return;
+
+            currentAIResponseElement = null;
+            const currentImageBase64 = selectedImageBase64;
+            const currentImageFile = selectedImageFile;
+
+            displayUserMessage(messageText, currentImageBase64);
+            
+            const userParts = [];
+            if (messageText) { userParts.push({ text: messageText }); }
+            if (currentImageBase64 && currentImageFile) {
+                userParts.push({ inlineData: { mimeType: currentImageFile.type, data: currentImageBase64.split(',')[1] } });
+            }
+            chatHistory.push({ role: "user", parts: userParts });
+            saveChatHistory();
+            chatInput.value = ''; clearImagePreview(); updateSendButtonState();
+            
+            const lowerMessageText = messageText.toLowerCase();
+            let isImageGenRequest = false; let imageGenPrompt = "";
+            for (const keyword of imageGenerationKeywords) {
+                if (lowerMessageText.includes(keyword)) {
+                    isImageGenRequest = true;
+                    let keywordIndex = lowerMessageText.indexOf(keyword);
+                    imageGenPrompt = messageText.substring(keywordIndex + keyword.length).trim();
+                    if (imageGenPrompt.startsWith(":") || imageGenPrompt.startsWith(",")) {
+                        imageGenPrompt = imageGenPrompt.substring(1).trim();
+                    }
+                    if (!imageGenPrompt) imageGenPrompt = "sesuatu yang lucu dan mengantuk seperti Hoshino Oji-san";
+                    break;
+                }
+            }
+
+            if (isImageGenRequest) {
+                await generateImageWithHoshino(imageGenPrompt);
+                chatInput.focus(); updateSendButtonState(); return;
+            }
+            
+            typingIndicator.classList.remove('hidden');
+            typingIndicator.style.display = 'flex';
+            let accumulatedResponse = "";
+            let finalBubbleForCopyButton = null;
+
+            try {
+                const apiKey = apikey_gemini;
+                 if (!apiKey) {
+                    throw new Error("API Key belum diatur. Mohon masukkan API Key Anda di variabel apikey_gemini.");
+                }
+                const apiPayloadContents = [
+                    { role: "user", parts: [{ text: hoshinoInitialPrompt }] },
+                    ...chatHistory.slice(1)
+                ];
+
+
+                const payload = { contents: apiPayloadContents };
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:streamGenerateContent?key=${apiKey}&alt=sse`;
+
+                const response = await fetch(apiUrl, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    let errorText = `Uhe~ Maaf, Oji-san lagi bingung: ${errorData.error?.message || response.statusText}. Nanti tanya lagi ya.`;
+                    if (response.status === 400 && errorData.error?.message.toLowerCase().includes("api key not valid")) {
+                         errorText = "Uhe~ API Key-nya Oji-san nggak valid nih. Coba cek lagi ya Sensei, atau dapatkan yang baru dari Google AI Studio.";
+                    } else if (response.status === 403) {
+                         errorText = "Uhe~ Oji-san nggak diizinin pakai API Key ini. Mungkin Sensei salah kasih kunci? Atau kuota Oji-san habis...";
+                    }
+                    finalBubbleForCopyButton = displayAIMessage({ text: errorText }, true, true);
+                    accumulatedResponse = errorText;
+                } else {
+                    const reader = response.body.getReader();
+                    const decoder = new TextDecoder();
+                    let firstChunk = true;
+
+                    while (true) {
+                        const { value, done } = await reader.read();
+                        if (done) break;
+                        const chunkText = decoder.decode(value, { stream: true });
+                        const lines = chunkText.split('\n');
+                        for (const line of lines) {
+                            if (line.startsWith('data: ')) {
+                                try {
+                                    const jsonData = JSON.parse(line.substring(5));
+                                    if (jsonData.candidates && jsonData.candidates[0].content && jsonData.candidates[0].content.parts && jsonData.candidates[0].content.parts[0].text) {
+                                        const textPart = jsonData.candidates[0].content.parts[0].text;
+                                        accumulatedResponse += textPart;
+                                        if (firstChunk) {
+                                            finalBubbleForCopyButton = displayAIMessage({ text: textPart }, false, true);
+                                            firstChunk = false;
+                                        } else if (finalBubbleForCopyButton) {
+                                            displayAIMessage({ text: textPart });
+                                        }
+                                    }
+                                } catch (e) { console.warn("Error parsing stream JSON:", e, "Line:", line); }
+                            }
+                        }
+                    }
+                }
+                if (!accumulatedResponse && !finalBubbleForCopyButton) { 
+                     accumulatedResponse = "Uhe~ Oji-san nggak ada ide mau ngomong apa... Zzz...";
+                     finalBubbleForCopyButton = displayAIMessage({ text: accumulatedResponse }, false, true);
+                }
+                chatHistory.push({ role: "model", parts: [{ text: accumulatedResponse }] });
+                saveChatHistory();
+                 if (finalBubbleForCopyButton && accumulatedResponse.trim() !== "") {
+                    addCopyButtonToBubble(finalBubbleForCopyButton, accumulatedResponse);
+                }
+
+            } catch (error) {
+                console.error("Error sending message:", error);
+                let netErrorMsg = 'Uhe~ Aduh, kayaknya Oji-san salah pencet atau koneksinya lagi tidur siang. Coba lagi ya.';
+                if (error.message.includes("API Key belum diatur")) {
+                     netErrorMsg = error.message + " Oji-san nggak bisa ngobrol kalau nggak ada kuncinya... Uhe~";
+                }
+                finalBubbleForCopyButton = displayAIMessage({ text: netErrorMsg }, true, true);
+                chatHistory.push({ role: "model", parts: [{ text: netErrorMsg }] });
+                saveChatHistory();
+                if (finalBubbleForCopyButton && netErrorMsg.trim() !== "") {
+                    addCopyButtonToBubble(finalBubbleForCopyButton, netErrorMsg);
+                }
+            } finally {
+                typingIndicator.classList.add('hidden');
+                chatInput.focus(); updateSendButtonState();
+                currentAIResponseElement = null;
+            }
+        }
+
+        imageInput.addEventListener('change', function(event) {
+            const file = event.target.files[0];
+            if (file) {
+                if (file.size > 4 * 1024 * 1024) {
+                    displayAIMessage({text: "Uhe~ Gambarnya kegedean, Oji-san gak kuat angkatnya. Coba yang lebih kecil ya (maks 4MB)."}, true, false);
+                    clearImagePreview(); return;
+                }
+                selectedImageFile = file;
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    selectedImageBase64 = e.target.result;
+                    imagePreview.src = selectedImageBase64;
+                    imagePreviewArea.classList.remove('hidden');
+                    updateSendButtonState();
+                }
+                reader.readAsDataURL(file);
+            }
+        });
+        removeImageButton.addEventListener('click', () => { clearImagePreview(); updateSendButtonState(); });
+        function clearImagePreview() {
+            selectedImageBase64 = null; selectedImageFile = null; imageInput.value = null;
+            imagePreview.src = '#'; imagePreviewArea.classList.add('hidden'); updateSendButtonState();
+        }
+        sendButton.addEventListener('click', sendMessage);
+        chatInput.addEventListener('keypress', function(event) {
+            if (event.key === 'Enter' && !sendButton.disabled) { sendMessage(); }
+        });
+        chatInput.addEventListener('input', updateSendButtonState);
+        
+        initializeApp().then(() => { setTimeout(scrollToBottom, 0); });
+    </script>
+</body>
+</html>
